@@ -22,6 +22,7 @@
 #include <pangolin/pangolin.h>
 #include <mutex>
 
+#define HAVE_EIGEN
 namespace ORB_SLAM3
 {
 
@@ -132,50 +133,165 @@ bool MapDrawer::ParseViewerParamFile(cv::FileStorage &fSettings)
     return !b_miss_params;
 }
 
-void MapDrawer::DrawMapPoints()
+
+// void MapDrawer::getGroundProjectPoint(Eigen::Vector3f &gPoint, float &pHeight, Eigen::Vector3f point, Eigen::Vector3f cPoint, const float cHeight, const char zeroPlane)
+void MapDrawer::getGroundProjectPoint(Eigen::Vector3f &gPoint, float &pHeight, Eigen::Vector3f point, Eigen::Vector3f gCPoint, Eigen::Vector3f upVec)
 {
-    Map* pActiveMap = mpAtlas->GetCurrentMap();
-    if(!pActiveMap)
+    // Perpendicular distance from interest point to ground
+    float dist = (point(0)-gCPoint(0))*upVec(0) + (point(1)-gCPoint(1))*upVec(1) + (point(2)-gCPoint(2))*upVec(2);
+    pHeight = abs(dist);
+    gPoint = point + upVec*dist;
+}
+
+void MapDrawer::SetColorByDistance(Eigen::Vector3f gPoint, Eigen::Vector3f gCPoint, const float thDistance, Eigen::Vector3f colorNear, Eigen::Vector3f colorFar)
+{
+    // Calculate distant from ground-point to camera
+    float distance2 = (pow(gCPoint(0) - gPoint(0), 2) + pow(gCPoint(1) - gPoint(1), 2) + pow(gCPoint(2) - gPoint(2), 2)) * 1.0;
+    float percent = distance2 / pow(thDistance, 2);
+    // Mix color
+    Eigen::Vector3f colorMix = (1.0 - percent) * colorNear + percent * colorFar;
+    glColor3f(colorMix[0], colorMix[1], colorMix[2]);
+}
+
+void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, pangolin::OpenGlMatrix Twc)
+{
+    Map *pActiveMap = mpAtlas->GetCurrentMap();
+    if (!pActiveMap)
         return;
 
-    const vector<MapPoint*> &vpMPs = pActiveMap->GetAllMapPoints();
-    const vector<MapPoint*> &vpRefMPs = pActiveMap->GetReferenceMapPoints();
+    const vector<MapPoint *> &vpMPs = pActiveMap->GetAllMapPoints();
+    const vector<MapPoint *> &vpRefMPs = pActiveMap->GetReferenceMapPoints();
 
-    set<MapPoint*> spRefMPs(vpRefMPs.begin(), vpRefMPs.end());
+    set<MapPoint *> spRefMPs(vpRefMPs.begin(), vpRefMPs.end());
 
-    if(vpMPs.empty())
+    if (vpMPs.empty())
         return;
+
+    Eigen::Vector3f camPos(Twc.m[12], Twc.m[13], Twc.m[14]);
+
+    const float thDis = 1.0;                // 10m from camera - for gradient color
+    const float scale = 0.5;
+    const float thHeight  = 0.025*scale;    // classification point at ground
+    const float camHeight = 0.093*scale;    // GPS/IMU height (0.93m KITTI)
+    // const float camHeight = 0.093;
+
+    // Get up-vector of camera
+    Eigen::Vector3f uVec( Twc.m[1], Twc.m[5], Twc.m[9]);
+    // Find projection of cam-point to the ground
+    glColor3f(0,0,0.5);
+    Eigen::Vector3f gCamPos = camPos + camHeight*uVec;
+
+    // glColor3f(0,0,0.5);
+    // pangolin::glDrawCross(gCamPos(0), gCamPos(1), gCamPos(2), 0.3);
+    //pangolin::glDrawLine(camPos(0), camPos(1), camPos(2), gCamPos(0), gCamPos(1), gCamPos(2));
+    // pangolin::glDrawLine(camPos(0), camPos(1), camPos(2), leftpt(0), leftpt(1), leftpt(2));
+    // pangolin::glDrawLine(camPos(0), camPos(1), camPos(2), forwardpt(0), forwardpt(1), forwardpt(2));
+    
 
     glPointSize(mPointSize);
     glBegin(GL_POINTS);
-    glColor3f(0.0,0.0,0.0);
-
-    for(size_t i=0, iend=vpMPs.size(); i<iend;i++)
+    glColor3f(0.0, 0.0, 0.0);
+    for (size_t i = 0, iend = vpMPs.size(); i < iend; i++)
     {
-        if(vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i]))
+        if (vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i]))
             continue;
-        Eigen::Matrix<float,3,1> pos = vpMPs[i]->GetWorldPos();
-        glVertex3f(pos(0),pos(1),pos(2));
+        Eigen::Matrix<float, 3, 1> pos = vpMPs[i]->GetWorldPos();
+        if (bHideGP)
+        {
+            Eigen::Vector3f gpPos;
+            float gpHeight;
+            getGroundProjectPoint(gpPos, gpHeight, pos, gCamPos, uVec);
+            if (gpHeight <= thHeight)
+                continue;
+            glVertex3f(pos(0), pos(1), pos(2));
+        }
+        else
+            glVertex3f(pos(0), pos(1), pos(2));
     }
     glEnd();
 
     glPointSize(mPointSize);
     glBegin(GL_POINTS);
-    glColor3f(1.0,0.0,0.0);
-
-    for(set<MapPoint*>::iterator sit=spRefMPs.begin(), send=spRefMPs.end(); sit!=send; sit++)
+    // glColor3f(1.0,0.0,0.0);
+    // std::cout << "==================== " <<endl;
+    for (set<MapPoint *>::iterator sit = spRefMPs.begin(), send = spRefMPs.end(); sit != send; sit++)
     {
-        if((*sit)->isBad())
+        if ((*sit)->isBad())
             continue;
-        Eigen::Matrix<float,3,1> pos = (*sit)->GetWorldPos();
-        glVertex3f(pos(0),pos(1),pos(2));
+        Eigen::Matrix<float, 3, 1> pos = (*sit)->GetWorldPos();
+        Eigen::Vector3f gpPos;
+        float gpHeight;
+        getGroundProjectPoint(gpPos, gpHeight, pos, gCamPos, uVec);
 
+        // if (sit == spRefMPs.begin())
+        // {
+        //     std::cout << "point  " << pos(1) << endl;
+        //     std::cout << "G_pt   " << gpPos(1) << endl;
+        //     std::cout << "height " << gpHeight << endl;
+
+        //     std::cout << "cam_pt " << camPos(1) << endl;
+        //     std::cout << "Gc_pt  " << gCamPos(1) << endl;
+        //     std::cout << "cH     " << camHeight << endl << endl;
+        // }
+        
+
+
+        if (gpHeight <= thHeight) // point at ground
+        {
+            if (bHideGP)
+                continue;
+            else
+            {
+                glColor3f(0.0, 1.0, 0.0);
+                glVertex3f(pos(0), pos(1), pos(2));
+            }
+        }
+        else
+        {
+            Eigen::Vector3f colorNear(1.0, 0.0, 0.0); // Red for near-point
+            Eigen::Vector3f colorFar(1.0, 0.0, 1.0);  // Purple for far-point
+            SetColorByDistance(gpPos, gCamPos, 2.0, colorNear, colorFar);
+            glVertex3f(pos(0), pos(1), pos(2));
+        }
     }
+    glEnd();
 
+    glBegin(GL_LINES);
+    if (bDrawVL)
+    {
+        for (set<MapPoint *>::iterator sit = spRefMPs.begin(), send = spRefMPs.end(); sit != send; sit++)
+        {
+            if ((*sit)->isBad())
+                continue;
+            Eigen::Matrix<float, 3, 1> pos = (*sit)->GetWorldPos();
+            Eigen::Vector3f gpPos;
+            float gpHeight;
+            getGroundProjectPoint(gpPos, gpHeight, pos, gCamPos, uVec);
+            if (gpHeight <= thHeight) // point at ground
+            {
+                if (bHideGP)
+                    continue;
+                else
+                {
+                    glColor3f(0.0, 1.0, 0.0);
+                    glVertex3f(pos(0), pos(1), pos(2));
+                    glVertex3f(gpPos(0), gpPos(1), gpPos(2));
+                }
+            }
+            else
+            {
+                Eigen::Vector3f colorNear(1.0, 0.0, 0.0); // Red for near-point
+                Eigen::Vector3f colorFar(1.0, 0.0, 1.0);  // Purple for far-point
+                SetColorByDistance(gpPos, gCamPos, thDis, colorNear, colorFar);
+                glVertex3f(pos(0), pos(1), pos(2));
+                glVertex3f(gpPos(0), gpPos(1), gpPos(2));
+            }
+        }
+    }
     glEnd();
 }
 
-void MapDrawer::DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const bool bDrawInertialGraph, const bool bDrawOptLba)
+void MapDrawer::DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const bool bDrawInertialGraph, const bool bDrawOptLba, const bool bDrawOptCovGraph)
 {
     const float &w = mKeyFrameSize;
     const float h = w*0.75;
@@ -274,7 +390,7 @@ void MapDrawer::DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const b
             // Covisibility Graph
             const vector<KeyFrame*> vCovKFs = vpKFs[i]->GetCovisiblesByWeight(100);
             Eigen::Vector3f Ow = vpKFs[i]->GetCameraCenter();
-            if(!vCovKFs.empty())
+            if(!vCovKFs.empty() && bDrawOptCovGraph)
             {
                 for(vector<KeyFrame*>::const_iterator vit=vCovKFs.begin(), vend=vCovKFs.end(); vit!=vend; vit++)
                 {
@@ -395,7 +511,7 @@ void MapDrawer::DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const b
     }
 }
 
-void MapDrawer::DrawCurrentCamera(pangolin::OpenGlMatrix &Twc)
+void MapDrawer::DrawCurrentCamera(pangolin::OpenGlMatrix Twc)
 {
     const float &w = mCameraSize;
     const float h = w*0.75;
@@ -437,7 +553,6 @@ void MapDrawer::DrawCurrentCamera(pangolin::OpenGlMatrix &Twc)
     glPopMatrix();
 }
 
-
 void MapDrawer::SetCurrentCameraPose(const Sophus::SE3f &Tcw)
 {
     unique_lock<mutex> lock(mMutexCamera);
@@ -464,4 +579,13 @@ void MapDrawer::GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix &M, pangolin
     MOw.m[13] = Twc(1,3);
     MOw.m[14] = Twc(2,3);
 }
-} //namespace ORB_SLAM
+
+void MapDrawer::DrawXYPlane()
+{
+    glColor3f(0.5f, 0.5f, 0.5f);
+    //pangolin::glDraw_z0(0.1f,100);
+    pangolin::glDraw_y0(0.1f,100);
+    //pangolin::LoadGeometryObj("3dmodel/lowpolycar.obj");
+    return;
+}
+}//namespace ORB_SLAM

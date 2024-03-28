@@ -43,12 +43,20 @@ public:
 
     Atlas* mpAtlas;
 
-    void DrawMapPoints();
-    void DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const bool bDrawInertialGraph, const bool bDrawOptLba);
-    void DrawCurrentCamera(pangolin::OpenGlMatrix &Twc);
+    // void DrawMapPoints(const bool bDrawVL, pangolin::OpenGlMatrix &Twc);
+    void DrawMapPoints(const bool bDrawVL, const bool bHideGP, pangolin::OpenGlMatrix Twc);
+    void DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const bool bDrawInertialGraph, const bool bDrawOptLba, const bool bDrawOptCovGraph);
+    void DrawCurrentCamera(pangolin::OpenGlMatrix Twc);
     void SetCurrentCameraPose(const Sophus::SE3f &Tcw);
     void SetReferenceKeyFrame(KeyFrame *pKF);
     void GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix &M, pangolin::OpenGlMatrix &MOw);
+    void DrawXYPlane();
+    // void DrawVerticalLine(Eigen::Matrix<float, 3, 1> point, Eigen::Matrix<float, 3, 1> gPoint);
+    // void SetColor(Eigen::Matrix<float,3,1> point,pangolin::OpenGlMatrix &Twc,const char zeroPlane, const float maxDistanceThreshold);
+    void SetColorByDistance(Eigen::Vector3f gPoint, Eigen::Vector3f gCPoint, const float thDistance, Eigen::Vector3f colorNear, Eigen::Vector3f colorFar);
+    // void getGroundProjectPoint(Eigen::Matrix<float, 3, 1> &gPoint, float &pHeight, Eigen::Matrix<float, 3, 1> point, Eigen::Matrix<float, 3, 1> cPoint, const float cHeight, const char zeroPlane);
+    void getGroundProjectPoint(Eigen::Vector3f &gPoint, float &pHeight, Eigen::Vector3f point, Eigen::Vector3f gCPoint, Eigen::Vector3f upVec);
+    // bool isGroundPoint(Eigen::Matrix<float,3,1> gPoint, const float pHeight, const float thHeight);
 
 private:
 

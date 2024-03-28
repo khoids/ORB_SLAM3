@@ -177,9 +177,15 @@ void Viewer::Run()
     pangolin::Var<bool> menuFollowCamera("menu.Follow Camera",false,true);
     pangolin::Var<bool> menuCamView("menu.Camera View",false,false);
     pangolin::Var<bool> menuTopView("menu.Top View",false,false);
+    // ##### 3rd View, XY-plane, vertical line toggle button
+    pangolin::Var<bool> menu3rdPersonView("menu.3rd Person View",true,false);
+    pangolin::Var<bool> menuShowXYPlane("menu.Show XY-Plane",false,true);
+    pangolin::Var<bool> menuShowVerticalLine("menu.Show Vertical Line",true,true);
+    pangolin::Var<bool> menuHideGroundPoints("menu.Hide Ground Point",false,true);
+    // #####
     // pangolin::Var<bool> menuSideView("menu.Side View",false,false);
     pangolin::Var<bool> menuShowPoints("menu.Show Points",true,true);
-    pangolin::Var<bool> menuShowKeyFrames("menu.Show KeyFrames",true,true);
+    pangolin::Var<bool> menuShowKeyFrames("menu.Show KeyFrames",false,true);
     pangolin::Var<bool> menuShowGraph("menu.Show Graph",false,true);
     pangolin::Var<bool> menuShowInertialGraph("menu.Show Inertial Graph",true,true);
     pangolin::Var<bool> menuLocalizationMode("menu.Localization Mode",false,true);
@@ -264,11 +270,12 @@ void Viewer::Run()
             menuCamView = false;
             bCameraView = true;
             s_cam.SetProjectionMatrix(pangolin::ProjectionMatrix(1024,768,mViewpointF,mViewpointF,512,389,0.1,10000));
-            s_cam.SetModelViewMatrix(pangolin::ModelViewLookAt(mViewpointX,mViewpointY,mViewpointZ, 0,0,0,0.0,-1.0, 0.0));
+            // s_cam.SetModelViewMatrix(pangolin::ModelViewLookAt(mViewpointX,mViewpointY,mViewpointZ, 0,0,0,0.0,-1.0, 0.0));
+            s_cam.SetModelViewMatrix(pangolin::ModelViewLookAt(0,-0.1,-2, 0,0,5, 0.0,-1.0, 0.0));
             s_cam.Follow(Twc);
         }
 
-        if(menuTopView && mpMapDrawer->mpAtlas->isImuInitialized())
+        if(menuTopView) //&& mpMapDrawer->mpAtlas->isImuInitialized())
         {
             menuTopView = false;
             bCameraView = false;
@@ -276,6 +283,17 @@ void Viewer::Run()
             s_cam.SetModelViewMatrix(pangolin::ModelViewLookAt(0,0.01,50, 0,0,0,0.0,0.0, 1.0));
             s_cam.Follow(Ow);
         }
+
+        // ##### 3rd View camera angle config
+        if(menu3rdPersonView)
+        {
+            menu3rdPersonView = false;
+            bCameraView = true;
+            s_cam.SetProjectionMatrix(pangolin::ProjectionMatrix(1024,768,mViewpointF,mViewpointF,512,389,0.1,10000));
+            s_cam.SetModelViewMatrix(pangolin::ModelViewLookAt(mViewpointX,mViewpointY+1,mViewpointZ-5, 0,0,0,0.0,-1.0, 0.0));
+            s_cam.Follow(Twc);
+        }
+        // #####
 
         if(menuLocalizationMode && !bLocalizationMode)
         {
@@ -311,9 +329,12 @@ void Viewer::Run()
         glClearColor(1.0f,1.0f,1.0f,1.0f);
         mpMapDrawer->DrawCurrentCamera(Twc);
         if(menuShowKeyFrames || menuShowGraph || menuShowInertialGraph || menuShowOptLba)
-            mpMapDrawer->DrawKeyFrames(menuShowKeyFrames,menuShowGraph, menuShowInertialGraph, menuShowOptLba);
-        if(menuShowPoints)
-            mpMapDrawer->DrawMapPoints();
+            mpMapDrawer->DrawKeyFrames(menuShowKeyFrames, menuShowGraph, menuShowInertialGraph, menuShowOptLba, false);
+        if (menuShowPoints || menuShowVerticalLine)
+            mpMapDrawer->DrawMapPoints(menuShowVerticalLine, menuHideGroundPoints, Twc);
+        // ##### Draw xy-plane
+        if (menuShowXYPlane)
+            mpMapDrawer->DrawXYPlane();
 
         pangolin::FinishFrame();
 
@@ -342,8 +363,11 @@ void Viewer::Run()
         {
             menuShowGraph = true;
             menuShowInertialGraph = true;
-            menuShowKeyFrames = true;
+            menuShowKeyFrames = false;
             menuShowPoints = true;
+            menuShowXYPlane = false;        // Set default value alway hide plane
+            menuShowVerticalLine = false;   // Set default value alway hide vertical line
+            menuHideGroundPoints = false;   // Set dafault value alway show ground points
             menuLocalizationMode = false;
             if(bLocalizationMode)
                 mpSystem->DeactivateLocalizationMode();
