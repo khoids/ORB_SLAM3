@@ -212,6 +212,9 @@ void Viewer::Run()
     Ow.SetIdentity();
     cv::namedWindow("ORB-SLAM3: Current Frame");
 
+    Frame currentFrame;
+    Eigen::Matrix4f mC;
+
     bool bFollow = true;
     bool bLocalizationMode = false;
     bool bStepByStep = false;
@@ -330,8 +333,11 @@ void Viewer::Run()
         mpMapDrawer->DrawCurrentCamera(Twc);
         if(menuShowKeyFrames || menuShowGraph || menuShowInertialGraph || menuShowOptLba)
             mpMapDrawer->DrawKeyFrames(menuShowKeyFrames, menuShowGraph, menuShowInertialGraph, menuShowOptLba, false);
+        //Eigen::Matrix4f currentFrame = mpTracker->mCurrentFrame.GetCameraCenter().matrix();
+        mC = mpTracker->mCurrentFrame.GetPose().inverse().matrix();
         if (menuShowPoints || menuShowVerticalLine)
-            mpMapDrawer->DrawMapPoints(menuShowVerticalLine, menuHideGroundPoints, Twc);
+            // mpMapDrawer->DrawMapPoints(menuShowVerticalLine, menuHideGroundPoints, Twc);
+            mpMapDrawer->DrawMapPoints(menuShowVerticalLine, menuHideGroundPoints, mC);
         // ##### Draw xy-plane
         if (menuShowXYPlane)
             mpMapDrawer->DrawXYPlane();

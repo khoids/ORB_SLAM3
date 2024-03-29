@@ -140,7 +140,8 @@ void MapDrawer::getGroundProjectPoint(Eigen::Vector3f &gPoint, float &pHeight, E
     // Perpendicular distance from interest point to ground
     float dist = (point(0)-gCPoint(0))*upVec(0) + (point(1)-gCPoint(1))*upVec(1) + (point(2)-gCPoint(2))*upVec(2);
     pHeight = abs(dist);
-    gPoint = point + upVec*dist;
+    // Shift interest point a distance pHeight along up-vector of camera 
+    gPoint = point - upVec*dist;
 }
 
 void MapDrawer::SetColorByDistance(Eigen::Vector3f gPoint, Eigen::Vector3f gCPoint, const float thDistance, Eigen::Vector3f colorNear, Eigen::Vector3f colorFar)
@@ -153,7 +154,7 @@ void MapDrawer::SetColorByDistance(Eigen::Vector3f gPoint, Eigen::Vector3f gCPoi
     glColor3f(colorMix[0], colorMix[1], colorMix[2]);
 }
 
-void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, pangolin::OpenGlMatrix Twc)
+void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, Eigen::Matrix4f Twc)
 {
     Map *pActiveMap = mpAtlas->GetCurrentMap();
     if (!pActiveMap)
@@ -167,23 +168,36 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, pangolin::
     if (vpMPs.empty())
         return;
 
-    Eigen::Vector3f camPos(Twc.m[12], Twc.m[13], Twc.m[14]);
+    // Get current camera pos
+    // Eigen::Vector3f camPos(Twc.m[3], Twc.m[7], Twc.m[11]);
+
+    const vector<KeyFrame*> vpKFs = pActiveMap->GetAllKeyFrames();
+    KeyFrame* pCam = vpKFs[vpKFs.size()-1];
+    Eigen::Vector3f camPos = pCam->GetCameraCenter();
+    Twc = pCam->GetPoseInverse().matrix();
+
+    //Eigen::Vector3f camPos (Twc(3), Twc(7), Twc(11));
 
     const float thDis = 1.0;                // 10m from camera - for gradient color
-    const float scale = 0.5;
+    const float scale = 1.0;
     const float thHeight  = 0.025*scale;    // classification point at ground
     const float camHeight = 0.093*scale;    // GPS/IMU height (0.93m KITTI)
     // const float camHeight = 0.093;
 
     // Get up-vector of camera
-    Eigen::Vector3f uVec( Twc.m[1], Twc.m[5], Twc.m[9]);
-    // Find projection of cam-point to the ground
-    glColor3f(0,0,0.5);
+    //Eigen::Vector3f uVec( Twc.m[4], Twc.m[5], Twc.m[6] );
+    Eigen::Vector3f uVec( Twc(4), Twc(5), Twc(6));
+    // Find projection of cam-position to the ground
     Eigen::Vector3f gCamPos = camPos + camHeight*uVec;
-
-    // glColor3f(0,0,0.5);
-    // pangolin::glDrawCross(gCamPos(0), gCamPos(1), gCamPos(2), 0.3);
-    //pangolin::glDrawLine(camPos(0), camPos(1), camPos(2), gCamPos(0), gCamPos(1), gCamPos(2));
+    
+    // Debug ground plane
+    // Eigen::Vector3f lVec( Twc(0), Twc(1), Twc(2));
+    // Eigen::Vector3f fVec( Twc(8), Twc(9), Twc(10));
+    // Eigen::Vector3f leftpt = camPos + camHeight*lVec;
+    // Eigen::Vector3f forwardpt = camPos + camHeight*fVec;
+    glColor3f(0,0,0.5);
+    pangolin::glDrawCross(gCamPos(0), gCamPos(1), gCamPos(2), 0.3);
+    // pangolin::glDrawLine(camPos(0), camPos(1), camPos(2), gCamPos(0), gCamPos(1), gCamPos(2));
     // pangolin::glDrawLine(camPos(0), camPos(1), camPos(2), leftpt(0), leftpt(1), leftpt(2));
     // pangolin::glDrawLine(camPos(0), camPos(1), camPos(2), forwardpt(0), forwardpt(1), forwardpt(2));
     
@@ -548,6 +562,13 @@ void MapDrawer::DrawCurrentCamera(pangolin::OpenGlMatrix Twc)
 
     glVertex3f(-w,-h,z);
     glVertex3f(w,-h,z);
+
+    // glVertex3f(0,0,0);
+    // glVertex3f(0,0,0.5);
+    // glVertex3f(0,0,0);
+    // glVertex3f(0,0.5,0);
+    // glVertex3f(0,0,0);
+    // glVertex3f(0.5,0,0);
     glEnd();
 
     glPopMatrix();
@@ -585,7 +606,6 @@ void MapDrawer::DrawXYPlane()
     glColor3f(0.5f, 0.5f, 0.5f);
     //pangolin::glDraw_z0(0.1f,100);
     pangolin::glDraw_y0(0.1f,100);
-    //pangolin::LoadGeometryObj("3dmodel/lowpolycar.obj");
     return;
 }
 }//namespace ORB_SLAM
