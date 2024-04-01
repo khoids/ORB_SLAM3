@@ -173,19 +173,20 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, Eigen::Mat
     // const vector<GeometricCamera*> vpCams = mpAtlas->GetAllCameras();
     // GeometricCamera* pCam = vpCams[vpCams.size()-1];
 
-    const vector<KeyFrame*> vpKFs = pActiveMap->GetAllKeyFrames();
-    KeyFrame* pCam = vpKFs[vpKFs.size()-1];
-    Eigen::Vector3f camPos = pCam->GetCameraCenter();
-    Twc = pCam->GetPoseInverse().matrix();
-    // unique_lock<mutex> lock(mMutexCamera);
-    // Eigen::Matrix4f T_wc = mCameraPose.matrix();
-    // for (int i = 0; i<4; i++) {
-    //     std::cout << T_wc(0,i) << endl;
-    //     std::cout << T_wc(1,i) << endl;
-    //     std::cout << T_wc(2,i) << endl;
-    //     std::cout << T_wc(3,i) << endl;
-    // }
-    // Eigen::Vector3f camPos( T_wc(12), T_wc(13), T_wc(14));
+    // const vector<KeyFrame*> vpKFs = pActiveMap->GetAllKeyFrames();
+    // KeyFrame* pCam = vpKFs[vpKFs.size()-1];
+    // Eigen::Vector3f camPos = pCam->GetCameraCenter();
+    // Twc = pCam->GetPoseInverse().matrix();
+
+    unique_lock<mutex> lock(mMutexCamera);
+    Eigen::Matrix4f T_wc = mCameraPose.matrix();
+    for (int i = 0; i<4; i++) {
+        std::cout << T_wc(0,i) << endl;
+        std::cout << T_wc(1,i) << endl;
+        std::cout << T_wc(2,i) << endl;
+        std::cout << T_wc(3,i) << endl;
+    }
+    Eigen::Vector3f camPos( T_wc(12), T_wc(13), T_wc(14));
 
     //Eigen::Vector3f camPos (Twc(3), Twc(7), Twc(11));
 
@@ -197,17 +198,17 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, Eigen::Mat
 
     // Get up-vector of camera
     //Eigen::Vector3f uVec( Twc.m[4], Twc.m[5], Twc.m[6] );
-    Eigen::Vector3f uVec( Twc(4), Twc(5), Twc(6));
-    // const Eigen::Vector3f uVec( T_wc(1), T_wc(5), T_wc(9));
+    // Eigen::Vector3f uVec( Twc(4), Twc(5), Twc(6));
+    Eigen::Vector3f uVec( T_wc(1), T_wc(5), T_wc(9));
     // Find projection of cam-position to the ground
     Eigen::Vector3f gCamPos = camPos + camHeight*uVec;
     
     // Debug ground plane
-    Eigen::Vector3f lVec( Twc(0), Twc(1), Twc(2));
-    Eigen::Vector3f fVec( Twc(8), Twc(9), Twc(10));
+    // Eigen::Vector3f lVec( Twc(0), Twc(1), Twc(2));
+    // Eigen::Vector3f fVec( Twc(8), Twc(9), Twc(10));
 
-    // Eigen::Vector3f lVec( T_wc(0), T_wc(1), T_wc(2));
-    // Eigen::Vector3f fVec( T_wc(8), T_wc(9), T_wc(10));
+    Eigen::Vector3f lVec( T_wc(0), T_wc(1), T_wc(2));
+    Eigen::Vector3f fVec( T_wc(8), T_wc(9), T_wc(10));
     Eigen::Vector3f leftpt = camPos + 0.5*lVec;
     Eigen::Vector3f forwardpt = camPos + 0.5*fVec;
     glColor3f(0,0,0.5);
