@@ -138,9 +138,10 @@ bool MapDrawer::ParseViewerParamFile(cv::FileStorage &fSettings)
 void MapDrawer::getGroundProjectPoint(Eigen::Vector3f &gPoint, float &pHeight, Eigen::Vector3f point, Eigen::Vector3f gCPoint, Eigen::Vector3f upVec)
 {
     // Perpendicular distance from interest point to ground
-    pHeight = abs((point(0)-gCPoint(0))*upVec(0) + (point(1)-gCPoint(1))*upVec(1) + (point(2)-gCPoint(2))*upVec(2));
+    float dist = (point(0)-gCPoint(0))*upVec(0) + (point(1)-gCPoint(1))*upVec(1) + (point(2)-gCPoint(2))*upVec(2);
+    pHeight = abs(dist);
     // Shift interest point a distance pHeight along up-vector of camera 
-    gPoint = point - upVec*pHeight;
+    gPoint = point - upVec*dist;
 }
 
 void MapDrawer::SetColorByDistance(Eigen::Vector3f gPoint, Eigen::Vector3f gCPoint, const float thDistance, Eigen::Vector3f colorNear, Eigen::Vector3f colorFar)
