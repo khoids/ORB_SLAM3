@@ -154,7 +154,7 @@ void MapDrawer::SetColorByDistance(Eigen::Vector3f gPoint, Eigen::Vector3f gCPoi
     glColor3f(colorMix[0], colorMix[1], colorMix[2]);
 }
 
-void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, Eigen::Matrix4f Twc)
+void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool bHideUGP)
 {
     Map *pActiveMap = mpAtlas->GetCurrentMap();
     if (!pActiveMap)
@@ -196,7 +196,8 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, Eigen::Mat
     pangolin::glDrawLine(camPos(0), camPos(1), camPos(2), gCamPos(0), gCamPos(1), gCamPos(2));
     pangolin::glDrawLine(camPos(0), camPos(1), camPos(2), leftpt(0), leftpt(1), leftpt(2));
     pangolin::glDrawLine(camPos(0), camPos(1), camPos(2), forwardpt(0), forwardpt(1), forwardpt(2));
-    
+   
+    Eigen::Vector3f lowestGPoint = gCamPos - thHeight * uVec;
 
     glPointSize(mPointSize);
     glBegin(GL_POINTS);
@@ -206,17 +207,16 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, Eigen::Mat
         if (vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i]))
             continue;
         Eigen::Matrix<float, 3, 1> pos = vpMPs[i]->GetWorldPos();
-        if (bHideGP)
-        {
-            Eigen::Vector3f gpPos;
-            float gpHeight;
-            getGroundProjectPoint(gpPos, gpHeight, pos, gCamPos, uVec);
-            if (gpHeight <= thHeight)
-                continue;
-            glVertex3f(pos(0), pos(1), pos(2));
-        }
-        else
-            glVertex3f(pos(0), pos(1), pos(2));
+        Eigen::Vector3f gpPos;
+        float gpHeight;
+        getGroundProjectPoint(gpPos, gpHeight, pos, gCamPos, uVec);
+
+        if (bHideGP && (gpHeight <= thHeight))
+            continue;
+        if (bHideUGP && (uVec.adjoint() * (pos - lowestGPoint) < 0))
+            continue;
+
+        glVertex3f(pos(0), pos(1), pos(2));
     }
     glEnd();
 
@@ -233,34 +233,21 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, Eigen::Mat
         float gpHeight;
         getGroundProjectPoint(gpPos, gpHeight, pos, gCamPos, uVec);
 
-        // if (sit == spRefMPs.begin())
-        // {
-        //     std::cout << "point  " << pos(1) << endl;
-        //     std::cout << "G_pt   " << gpPos(1) << endl;
-        //     std::cout << "height " << gpHeight << endl;
+        if (bHideGP && (gpHeight <= thHeight))
+            continue;
+        if (bHideUGP && (uVec.adjoint() * (pos - lowestGPoint) < 0))
+            continue;
 
-        //     std::cout << "cam_pt " << camPos(1) << endl;
-        //     std::cout << "Gc_pt  " << gCamPos(1) << endl;
-        //     std::cout << "cH     " << camHeight << endl << endl;
-        // }
-        
-
-
-        if (gpHeight <= thHeight) // point at ground
+        if (gpHeight <= thHeight)
         {
-            if (bHideGP)
-                continue;
-            else
-            {
-                glColor3f(0.0, 1.0, 0.0);
-                glVertex3f(pos(0), pos(1), pos(2));
-            }
+            glColor3f(0.0, 1.0, 0.0);
+            glVertex3f(pos(0), pos(1), pos(2));
         }
         else
         {
             Eigen::Vector3f colorNear(1.0, 0.0, 0.0); // Red for near-point
             Eigen::Vector3f colorFar(1.0, 0.0, 1.0);  // Purple for far-point
-            SetColorByDistance(gpPos, gCamPos, 2.0, colorNear, colorFar);
+            SetColorByDistance(gpPos, gCamPos, thDis, colorNear, colorFar);
             glVertex3f(pos(0), pos(1), pos(2));
         }
     }
@@ -277,16 +264,17 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, Eigen::Mat
             Eigen::Vector3f gpPos;
             float gpHeight;
             getGroundProjectPoint(gpPos, gpHeight, pos, gCamPos, uVec);
+
+            if (bHideGP && (gpHeight <= thHeight))
+                continue;
+            if (bHideUGP && (uVec.adjoint() * (pos - lowestGPoint) < 0))
+                continue;
+
             if (gpHeight <= thHeight) // point at ground
             {
-                if (bHideGP)
-                    continue;
-                else
-                {
-                    glColor3f(0.0, 1.0, 0.0);
-                    glVertex3f(pos(0), pos(1), pos(2));
-                    glVertex3f(gpPos(0), gpPos(1), gpPos(2));
-                }
+                glColor3f(0.0, 1.0, 0.0);
+                glVertex3f(pos(0), pos(1), pos(2));
+                glVertex3f(gpPos(0), gpPos(1), gpPos(2));
             }
             else
             {

@@ -45,7 +45,7 @@ public:
     Atlas* mpAtlas;
 
     // void DrawMapPoints(const bool bDrawVL, const bool bHideGP);//, pangolin::OpenGlMatrix Twc);
-    void DrawMapPoints(const bool bDrawVL, const bool bHideGP, Eigen::Matrix4f Twc);
+    void DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool bHideUGP);
     void DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph, const bool bDrawInertialGraph, const bool bDrawOptLba, const bool bDrawOptCovGraph);
     void DrawCurrentCamera(pangolin::OpenGlMatrix Twc);
     void SetCurrentCameraPose(const Sophus::SE3f &Tcw);

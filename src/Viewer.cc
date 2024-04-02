@@ -180,8 +180,9 @@ void Viewer::Run()
     // ##### 3rd View, XY-plane, vertical line toggle button
     pangolin::Var<bool> menu3rdPersonView("menu.3rd Person View",true,false);
     pangolin::Var<bool> menuShowXYPlane("menu.Show XY-Plane",false,true);
-    pangolin::Var<bool> menuShowVerticalLine("menu.Show Vertical Line",true,true);
-    pangolin::Var<bool> menuHideGroundPoints("menu.Hide Ground Point",false,true);
+    pangolin::Var<bool> menuShowVerticalLine("menu.Show Vertical Lines",true,true);
+    pangolin::Var<bool> menuHideGroundPoints("menu.Hide Ground Points",false,true);
+    pangolin::Var<bool> menuHideUnderGroundPoints("menu.Hide Under Ground Points",true,true);
     // #####
     // pangolin::Var<bool> menuSideView("menu.Side View",false,false);
     pangolin::Var<bool> menuShowPoints("menu.Show Points",true,true);
@@ -211,9 +212,6 @@ void Viewer::Run()
     pangolin::OpenGlMatrix Ow; // Oriented with g in the z axis
     Ow.SetIdentity();
     cv::namedWindow("ORB-SLAM3: Current Frame");
-
-    Frame currentFrame;
-    Eigen::Matrix4f mC;
 
     bool bFollow = true;
     bool bLocalizationMode = false;
@@ -333,11 +331,9 @@ void Viewer::Run()
         mpMapDrawer->DrawCurrentCamera(Twc);
         if(menuShowKeyFrames || menuShowGraph || menuShowInertialGraph || menuShowOptLba)
             mpMapDrawer->DrawKeyFrames(menuShowKeyFrames, menuShowGraph, menuShowInertialGraph, menuShowOptLba, false);
-        //Eigen::Matrix4f currentFrame = mpTracker->mCurrentFrame.GetCameraCenter().matrix();
-        mC = mpTracker->mCurrentFrame.GetPose().inverse().matrix();
-        if (menuShowPoints || menuShowVerticalLine)
-            // mpMapDrawer->DrawMapPoints(menuShowVerticalLine, menuHideGroundPoints, Twc);
-            mpMapDrawer->DrawMapPoints(menuShowVerticalLine, menuHideGroundPoints, mC);
+        //mpSystem->GetCalibCamEgo()->getCalib(1);
+        if (menuShowPoints)
+            mpMapDrawer->DrawMapPoints(menuShowVerticalLine, menuHideGroundPoints, menuHideUnderGroundPoints);
         // ##### Draw xy-plane
         if (menuShowXYPlane)
             mpMapDrawer->DrawXYPlane();
@@ -374,6 +370,7 @@ void Viewer::Run()
             menuShowXYPlane = false;        // Set default value alway hide plane
             menuShowVerticalLine = false;   // Set default value alway hide vertical line
             menuHideGroundPoints = false;   // Set dafault value alway show ground points
+            menuHideUnderGroundPoints = true;// Set dafault value alway hide under ground points
             menuLocalizationMode = false;
             if(bLocalizationMode)
                 mpSystem->DeactivateLocalizationMode();
