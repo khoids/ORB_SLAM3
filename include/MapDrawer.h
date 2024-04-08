@@ -52,6 +52,7 @@ public:
     void SetReferenceKeyFrame(KeyFrame *pKF);
     void GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix &M, pangolin::OpenGlMatrix &MOw);
     void DrawXYPlane();
+    void ComputeGroundPos();
     void SetColorByDistance(Eigen::Vector3f gPoint, Eigen::Vector3f gCPoint, const float thDistance, Eigen::Vector3f colorNear, Eigen::Vector3f colorFar);
     void SetColorByDistance(const float distance, const float thDistance, Eigen::Vector3f colorNear, Eigen::Vector3f colorFar);
 

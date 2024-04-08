@@ -2083,6 +2083,16 @@ void Tracking::Track()
                         mCurrentFrame.SetPose(TcwMM);
                         mCurrentFrame.mvpMapPoints = vpMPsMM;
                         mCurrentFrame.mvbOutlier = vbOutMM;
+                        
+                        // Calculate ground points when frame pose is updated
+                        // for (size_t iMP = 0; iMP < mCurrentFrame.mvpMapPoints.size(); iMP++)
+                        // {
+                        //     if (mCurrentFrame.mvpMapPoints[iMP])
+                        //     {
+                        //         MapPoint *pMP = mCurrentFrame.mvpMapPoints[iMP];
+                        //         pMP->ComputeGroundPos();
+                        //     }
+                        // }
 
                         if(mbVO)
                         {
@@ -2201,6 +2211,7 @@ void Tracking::Track()
         mpFrameDrawer->Update(this);
         if(mCurrentFrame.isSet())
             mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.GetPose());
+            mpMapDrawer->ComputeGroundPos();
 
         if(bOK || mState==RECENTLY_LOST)
         {
@@ -2217,6 +2228,7 @@ void Tracking::Track()
 
             if(mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
                 mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.GetPose());
+                mpMapDrawer->ComputeGroundPos();
 
             // Clean VO matches
             for(int i=0; i<mCurrentFrame.N; i++)
@@ -2439,6 +2451,7 @@ void Tracking::StereoInitialization()
         mpAtlas->GetCurrentMap()->mvpKeyFrameOrigins.push_back(pKFini);
 
         mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.GetPose());
+        mpMapDrawer->ComputeGroundPos();
 
         mState=OK;
     }
@@ -2650,6 +2663,7 @@ void Tracking::CreateInitialMapMonocular()
     mpAtlas->SetReferenceMapPoints(mvpLocalMapPoints);
 
     mpMapDrawer->SetCurrentCameraPose(pKFcur->GetPose());
+    mpMapDrawer->ComputeGroundPos();
 
     mpAtlas->GetCurrentMap()->mvpKeyFrameOrigins.push_back(pKFini);
 
@@ -2844,6 +2858,8 @@ void Tracking::UpdateLastFrame()
         {
             nPoints++;
         }
+
+        //mLastFrame.mvpMapPoints[i]->ComputeGroundPos();
 
         if(vDepthIdx[j].first>mThDepth && nPoints>100)
             break;

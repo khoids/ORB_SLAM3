@@ -136,8 +136,8 @@ bool MapDrawer::ParseViewerParamFile(cv::FileStorage &fSettings)
 void MapDrawer::SetColorByDistance(Eigen::Vector3f gPoint, Eigen::Vector3f gCPoint, const float thDistance, Eigen::Vector3f colorNear, Eigen::Vector3f colorFar)
 {
     // Calculate distant from ground-point to camera
-    float distance2 = (pow(gCPoint(0) - gPoint(0), 2) + pow(gCPoint(1) - gPoint(1), 2) + pow(gCPoint(2) - gPoint(2), 2)) * 1.0;
-    float percent = distance2 / pow(thDistance, 2);
+    float distance = (gCPoint - gPoint).norm();
+    float percent = distance / thDistance;
     // Mix color
     Eigen::Vector3f colorMix = (1.0 - percent) * colorNear + percent * colorFar;
     glColor3f(colorMix[0], colorMix[1], colorMix[2]);
@@ -169,9 +169,9 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool
     unique_lock<mutex> lock(mMutexCamera);
     Eigen::Matrix4f T_wc = mCameraPose.matrix();
     Eigen::Vector3f camPos( T_wc(12), T_wc(13), T_wc(14));
-
+    
     const float thDis = 1.0;                // 10m from camera - for gradient color
-    const float scale = 1;
+    const float scale = 1.0;
     const float thHeight  = 0.025*scale;    // classification point at ground
     const float camHeight = 0.095*scale;    // GPS/IMU height (0.93m KITTI)
     // const float camHeight = 0.093;
@@ -203,8 +203,8 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool
     {
         if (vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i]))
             continue;
-        Eigen::Matrix<float, 3, 1> pos = vpMPs[i]->GetWorldPos();
-        vpMPs[i]->ComputeGroundPos();
+        Eigen::Vector3f pos = vpMPs[i]->GetWorldPos();
+        //vpMPs[i]->ComputeGroundPos();
         Eigen::Vector3f gpPos = vpMPs[i]->GetWorldGPos();
 
         if (bHideGP && vpMPs[i]->isGroundPoint())
@@ -224,8 +224,8 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool
     {
         if ((*sit)->isBad())
             continue;
-        Eigen::Matrix<float, 3, 1> pos = (*sit)->GetWorldPos();
-        (*sit)->ComputeGroundPos();
+        Eigen::Vector3f pos = (*sit)->GetWorldPos();
+        //(*sit)->ComputeGroundPos();
         Eigen::Vector3f gpPos = (*sit)->GetWorldGPos();
 
         if (bHideGP && (*sit)->isGroundPoint())
@@ -242,8 +242,8 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool
         {
             Eigen::Vector3f colorNear(1.0, 0.0, 0.0); // Red for near-point
             Eigen::Vector3f colorFar(1.0, 0.0, 1.0);  // Purple for far-point
-            //SetColorByDistance(gpPos, gCamPos, thDis, colorNear, colorFar);
-            SetColorByDistance((*sit)->GetWorldDistance(), thDis, colorNear, colorFar);
+            SetColorByDistance(gpPos, gCamPos, thDis, colorNear, colorFar);
+            //SetColorByDistance((*sit)->GetWorldDistance(), thDis, colorNear, colorFar);
             glVertex3f(pos(0), pos(1), pos(2));
         }
     }
@@ -256,7 +256,7 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool
         {
             if ((*sit)->isBad())
                 continue;
-            Eigen::Matrix<float, 3, 1> pos = (*sit)->GetWorldPos();
+            Eigen::Vector3f pos = (*sit)->GetWorldPos();
             Eigen::Vector3f gpPos = (*sit)->GetWorldGPos();;
 
             if (bHideGP && ((*sit)->isGroundPoint()))
@@ -274,8 +274,8 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool
             {
                 Eigen::Vector3f colorNear(1.0, 0.0, 0.0); // Red for near-point
                 Eigen::Vector3f colorFar(1.0, 0.0, 1.0);  // Purple for far-point
-                //SetColorByDistance(gpPos, gCamPos, thDis, colorNear, colorFar);
-                SetColorByDistance((*sit)->GetWorldDistance(), thDis, colorNear, colorFar);
+                SetColorByDistance(gpPos, gCamPos, thDis, colorNear, colorFar);
+                //SetColorByDistance((*sit)->GetWorldDistance(), thDis, colorNear, colorFar);
                 glVertex3f(pos(0), pos(1), pos(2));
                 glVertex3f(gpPos(0), gpPos(1), gpPos(2));
             }
@@ -557,6 +557,32 @@ void MapDrawer::SetCurrentCameraPose(const Sophus::SE3f &Tcw)
 {
     unique_lock<mutex> lock(mMutexCamera);
     mCameraPose = Tcw.inverse();
+}
+
+void MapDrawer::ComputeGroundPos()
+{
+    Map *pActiveMap = mpAtlas->GetCurrentMap();
+    if (!pActiveMap)
+        return;
+
+    const vector<MapPoint *> &vpMPs = pActiveMap->GetAllMapPoints();
+    const vector<MapPoint *> &vpRefMPs = pActiveMap->GetReferenceMapPoints();
+
+    set<MapPoint *> spRefMPs(vpRefMPs.begin(), vpRefMPs.end());
+
+    for (size_t i = 0, iend = vpMPs.size(); i < iend; i++)
+    {
+        if (vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i]))
+            continue;
+        vpMPs[i]->ComputeGroundPos();
+    }
+
+    for (set<MapPoint *>::iterator sit = spRefMPs.begin(), send = spRefMPs.end(); sit != send; sit++)
+    {
+        if ((*sit)->isBad())
+            continue;
+        (*sit)->ComputeGroundPos();
+    }
 }
 
 void MapDrawer::GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix &M, pangolin::OpenGlMatrix &MOw)
