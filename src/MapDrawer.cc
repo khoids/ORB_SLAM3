@@ -133,22 +133,19 @@ bool MapDrawer::ParseViewerParamFile(cv::FileStorage &fSettings)
     return !b_miss_params;
 }
 
-
-// void MapDrawer::getGroundProjectPoint(Eigen::Vector3f &gPoint, float &pHeight, Eigen::Vector3f point, Eigen::Vector3f cPoint, const float cHeight, const char zeroPlane)
-void MapDrawer::getGroundProjectPoint(Eigen::Vector3f &gPoint, float &pHeight, Eigen::Vector3f point, Eigen::Vector3f gCPoint, Eigen::Vector3f upVec)
-{
-    // Perpendicular distance from interest point to ground
-    float dist = (point(0)-gCPoint(0))*upVec(0) + (point(1)-gCPoint(1))*upVec(1) + (point(2)-gCPoint(2))*upVec(2);
-    pHeight = abs(dist);
-    // Shift interest point a distance pHeight along up-vector of camera 
-    gPoint = point - upVec*dist;
-}
-
 void MapDrawer::SetColorByDistance(Eigen::Vector3f gPoint, Eigen::Vector3f gCPoint, const float thDistance, Eigen::Vector3f colorNear, Eigen::Vector3f colorFar)
 {
     // Calculate distant from ground-point to camera
     float distance2 = (pow(gCPoint(0) - gPoint(0), 2) + pow(gCPoint(1) - gPoint(1), 2) + pow(gCPoint(2) - gPoint(2), 2)) * 1.0;
     float percent = distance2 / pow(thDistance, 2);
+    // Mix color
+    Eigen::Vector3f colorMix = (1.0 - percent) * colorNear + percent * colorFar;
+    glColor3f(colorMix[0], colorMix[1], colorMix[2]);
+}
+
+void MapDrawer::SetColorByDistance(const float distance, const float thDistance, Eigen::Vector3f colorNear, Eigen::Vector3f colorFar)
+{
+    float percent = distance / thDistance;
     // Mix color
     Eigen::Vector3f colorMix = (1.0 - percent) * colorNear + percent * colorFar;
     glColor3f(colorMix[0], colorMix[1], colorMix[2]);
@@ -207,14 +204,13 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool
         if (vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i]))
             continue;
         Eigen::Matrix<float, 3, 1> pos = vpMPs[i]->GetWorldPos();
-        Eigen::Vector3f gpPos;
-        float gpHeight;
-        getGroundProjectPoint(gpPos, gpHeight, pos, gCamPos, uVec);
+        vpMPs[i]->ComputeGroundPos();
+        Eigen::Vector3f gpPos = vpMPs[i]->GetWorldGPos();
 
-        if (bHideGP && (gpHeight <= thHeight))
+        if (bHideGP && vpMPs[i]->isGroundPoint())
             continue;
-        if (bHideUGP && (uVec.adjoint() * (pos - lowestGPoint) < 0))
-            continue;
+        // if (bHideUGP && (uVec.adjoint() * (pos - lowestGPoint) < 0))
+        //     continue;
 
         glVertex3f(pos(0), pos(1), pos(2));
     }
@@ -229,16 +225,15 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool
         if ((*sit)->isBad())
             continue;
         Eigen::Matrix<float, 3, 1> pos = (*sit)->GetWorldPos();
-        Eigen::Vector3f gpPos;
-        float gpHeight;
-        getGroundProjectPoint(gpPos, gpHeight, pos, gCamPos, uVec);
+        (*sit)->ComputeGroundPos();
+        Eigen::Vector3f gpPos = (*sit)->GetWorldGPos();
 
-        if (bHideGP && (gpHeight <= thHeight))
+        if (bHideGP && (*sit)->isGroundPoint())
             continue;
-        if (bHideUGP && (uVec.adjoint() * (pos - lowestGPoint) < 0))
-            continue;
+        // if (bHideUGP && (uVec.adjoint() * (pos - lowestGPoint) < 0))
+        //     continue;
 
-        if (gpHeight <= thHeight)
+        if ((*sit)->isGroundPoint())
         {
             glColor3f(0.0, 1.0, 0.0);
             glVertex3f(pos(0), pos(1), pos(2));
@@ -247,7 +242,8 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool
         {
             Eigen::Vector3f colorNear(1.0, 0.0, 0.0); // Red for near-point
             Eigen::Vector3f colorFar(1.0, 0.0, 1.0);  // Purple for far-point
-            SetColorByDistance(gpPos, gCamPos, thDis, colorNear, colorFar);
+            //SetColorByDistance(gpPos, gCamPos, thDis, colorNear, colorFar);
+            SetColorByDistance((*sit)->GetWorldDistance(), thDis, colorNear, colorFar);
             glVertex3f(pos(0), pos(1), pos(2));
         }
     }
@@ -261,16 +257,14 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool
             if ((*sit)->isBad())
                 continue;
             Eigen::Matrix<float, 3, 1> pos = (*sit)->GetWorldPos();
-            Eigen::Vector3f gpPos;
-            float gpHeight;
-            getGroundProjectPoint(gpPos, gpHeight, pos, gCamPos, uVec);
+            Eigen::Vector3f gpPos = (*sit)->GetWorldGPos();;
 
-            if (bHideGP && (gpHeight <= thHeight))
+            if (bHideGP && ((*sit)->isGroundPoint()))
                 continue;
-            if (bHideUGP && (uVec.adjoint() * (pos - lowestGPoint) < 0))
-                continue;
+            // if (bHideUGP && (uVec.adjoint() * (pos - lowestGPoint) < 0))
+            //     continue;
 
-            if (gpHeight <= thHeight) // point at ground
+            if ((*sit)->isGroundPoint()) // point at ground
             {
                 glColor3f(0.0, 1.0, 0.0);
                 glVertex3f(pos(0), pos(1), pos(2));
@@ -280,7 +274,8 @@ void MapDrawer::DrawMapPoints(const bool bDrawVL, const bool bHideGP, const bool
             {
                 Eigen::Vector3f colorNear(1.0, 0.0, 0.0); // Red for near-point
                 Eigen::Vector3f colorFar(1.0, 0.0, 1.0);  // Purple for far-point
-                SetColorByDistance(gpPos, gCamPos, thDis, colorNear, colorFar);
+                //SetColorByDistance(gpPos, gCamPos, thDis, colorNear, colorFar);
+                SetColorByDistance((*sit)->GetWorldDistance(), thDis, colorNear, colorFar);
                 glVertex3f(pos(0), pos(1), pos(2));
                 glVertex3f(gpPos(0), gpPos(1), gpPos(2));
             }

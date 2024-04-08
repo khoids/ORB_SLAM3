@@ -85,6 +85,7 @@ class MapPoint
         // Protected variables
         ar & boost::serialization::make_array(mWorldPos.data(), mWorldPos.size());
         ar & boost::serialization::make_array(mNormalVector.data(), mNormalVector.size());
+        ar & boost::serialization::make_array(mWorldGPos.data(), mWorldGPos.size());
         //ar & BOOST_SERIALIZATION_NVP(mBackupObservationsId);
         //ar & mObservations;
         ar & mBackupObservationsId1;
@@ -130,6 +131,14 @@ public:
 
     void SetBadFlag();
     bool isBad();
+
+    void ComputeGroundPos();            // Find the "shadow" (the point that project from ref-point to the estimate ground plane) position of the ref-point
+    void SetGroundPos(const Eigen::Vector3f &gPos);
+    Eigen::Vector3f GetWorldGPos();
+    float GetWorldHeight();
+    float GetWorldDistance();
+    void SetGroundFlag(bool bGround);   // Set ref-point ground flag
+    bool isGroundPoint();
 
     void Replace(MapPoint* pMP);    
     MapPoint* GetReplaced();
@@ -211,6 +220,11 @@ protected:
 
      // Position in absolute coordinates
      Eigen::Vector3f mWorldPos;
+     Eigen::Vector3f mWorldGPos;
+     float mHeight;
+     float mDistance;
+     // Determine if a point lies on the ground
+     bool mbGround;
 
      // Keyframes observing the point and associated index in keyframe
      std::map<KeyFrame*,std::tuple<int,int> > mObservations;

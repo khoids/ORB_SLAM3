@@ -50,6 +50,8 @@ MapPoint::MapPoint(const Eigen::Vector3f &Pos, KeyFrame *pRefKF, Map* pMap):
     mbTrackInViewR = false;
     mbTrackInView = false;
 
+    // ComputeGroundPos();
+
     // MapPoints can be created from Tracking and Local Mapping. This mutex avoid conflicts with id.
     unique_lock<mutex> lock(mpMap->mMutexPointCreation);
     mnId=nNextId++;
@@ -109,6 +111,8 @@ MapPoint::MapPoint(const Eigen::Vector3f &Pos, Map* pMap, Frame* pFrame, const i
     mfMinDistance = mfMaxDistance/pFrame->mvScaleFactors[nLevels-1];
 
     pFrame->mDescriptors.row(idxF).copyTo(mDescriptor);
+
+    // ComputeGroundPos();
 
     // MapPoints can be created from Tracking and Local Mapping. This mutex avoid conflicts with id.
     unique_lock<mutex> lock(mpMap->mMutexPointCreation);
@@ -211,6 +215,79 @@ int MapPoint::Observations()
 {
     unique_lock<mutex> lock(mMutexFeatures);
     return nObs;
+}
+
+// Find the project-to-ground postion of current map point
+void MapPoint::ComputeGroundPos()
+{
+    const float thHeight  = 0.025;
+    const float camHeight = 0.095;
+    // Get current camera pos and pose
+    Eigen::Vector3f camPos = mpRefKF->GetCameraCenter();
+    Eigen::Matrix3f mRcw = mpRefKF->GetRotation().inverse().matrix();
+    // Get left and forward vector from world-from-camera rotation matrix 
+    Eigen::Vector3f lVec( mRcw(0), mRcw(1), mRcw(2));
+    Eigen::Vector3f fVec( mRcw(6), mRcw(7), mRcw(8));
+    Eigen::Vector3f leftpt = camPos + 0.5*lVec;
+    Eigen::Vector3f forwardpt = camPos + 0.5*fVec;
+    // Somehow up-vector get from Rcw is wrong. So we'll calculate up-vector from left and forward vector instead
+    Eigen::Vector3f uVec = lVec.cross(fVec).normalized();
+    Eigen::Vector3f gCamPos = camPos - camHeight*uVec;
+    gCamPos = camPos - camHeight*uVec;
+    // Perpendicular distance from interest point to ground
+    const float dist = (mWorldPos(0)-gCamPos(0))*uVec(0) + (mWorldPos(1)-gCamPos(1))*uVec(1) + (mWorldPos(2)-gCamPos(2))*uVec(2);
+    mHeight = abs(dist);
+    // Shift interest point a distance pHeight along up-vector of camera
+    Eigen::Vector3f gPos = mWorldPos - uVec*dist;
+    SetGroundPos(gPos);
+
+    if (mHeight <= thHeight)
+        SetGroundFlag(true);
+    else
+        SetGroundFlag(false);
+
+    // Calculate distant from project-to-ground pos to camera ground-pos
+    mDistance = (gCamPos - mWorldGPos).norm();
+}
+
+void MapPoint::SetGroundPos(const Eigen::Vector3f &gPos)
+{
+    unique_lock<mutex> lock1(mMutexFeatures);
+    unique_lock<mutex> lock2(mMutexPos);
+    mWorldGPos = gPos;
+}
+
+Eigen::Vector3f MapPoint::GetWorldGPos() {
+    unique_lock<mutex> lock1(mMutexFeatures);
+    unique_lock<mutex> lock2(mMutexPos);
+    return mWorldGPos;
+}
+
+float MapPoint::GetWorldHeight() {
+    unique_lock<mutex> lock1(mMutexFeatures);
+    unique_lock<mutex> lock2(mMutexPos);
+    return mHeight;
+}
+
+// Distance between the projections of ref-point and camera onto the ground plane
+float MapPoint::GetWorldDistance() {
+    unique_lock<mutex> lock1(mMutexFeatures);
+    unique_lock<mutex> lock2(mMutexPos);
+    return mDistance;
+}
+
+void MapPoint::SetGroundFlag(bool bGround)
+{
+    unique_lock<mutex> lock1(mMutexFeatures);
+    unique_lock<mutex> lock2(mMutexPos);
+    mbGround=bGround;
+}
+
+bool MapPoint::isGroundPoint()
+{
+    unique_lock<mutex> lock1(mMutexFeatures);
+    unique_lock<mutex> lock2(mMutexPos);
+    return mbGround;
 }
 
 void MapPoint::SetBadFlag()

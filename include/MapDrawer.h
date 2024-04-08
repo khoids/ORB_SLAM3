@@ -53,7 +53,7 @@ public:
     void GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix &M, pangolin::OpenGlMatrix &MOw);
     void DrawXYPlane();
     void SetColorByDistance(Eigen::Vector3f gPoint, Eigen::Vector3f gCPoint, const float thDistance, Eigen::Vector3f colorNear, Eigen::Vector3f colorFar);
-    void getGroundProjectPoint(Eigen::Vector3f &gPoint, float &pHeight, Eigen::Vector3f point, Eigen::Vector3f gCPoint, Eigen::Vector3f upVec);
+    void SetColorByDistance(const float distance, const float thDistance, Eigen::Vector3f colorNear, Eigen::Vector3f colorFar);
 
 private:
 
