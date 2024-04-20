@@ -28,6 +28,7 @@
 
 
 namespace ORB_SLAM3 {
+// 左目纯位姿优化的边，左目点的重投影误差相对于左目位姿
 class  EdgeSE3ProjectXYZOnlyPose: public  g2o::BaseUnaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap>{
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -56,6 +57,7 @@ public:
     GeometricCamera* pCamera;
 };
 
+// 两个相机中的右目上的重投影误差与左目位姿的边
 class  EdgeSE3ProjectXYZOnlyPoseToBody: public  g2o::BaseUnaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap>{
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -86,6 +88,7 @@ public:
     g2o::SE3Quat mTrl;
 };
 
+// 左目纯位姿优化的边，左目点的重投影误差相对于左目位姿以及三维点
 class  EdgeSE3ProjectXYZ: public  g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSBAPointXYZ, g2o::VertexSE3Expmap>{
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -114,6 +117,7 @@ public:
     GeometricCamera* pCamera;
 };
 
+// 两个相机中的右目上的重投影误差与左目位姿以及三维点的边
 class  EdgeSE3ProjectXYZToBody: public  g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSBAPointXYZ, g2o::VertexSE3Expmap>{
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -143,6 +147,7 @@ public:
     g2o::SE3Quat mTrl;
 };
 
+// sim3节点
 class VertexSim3Expmap : public g2o::BaseVertex<7, g2o::Sim3>
 {
 public:
@@ -151,10 +156,12 @@ public:
     virtual bool read(std::istream& is);
     virtual bool write(std::ostream& os) const;
 
+    // 原始值
     virtual void setToOriginImpl() {
         _estimate = g2o::Sim3();
     }
 
+    // 更新
     virtual void oplusImpl(const double* update_)
     {
         Eigen::Map<g2o::Vector7d> update(const_cast<double*>(update_));
@@ -171,7 +178,7 @@ public:
     bool _fix_scale;
 };
 
-
+// sim3边
 class EdgeSim3ProjectXYZ : public  g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSBAPointXYZ, ORB_SLAM3::VertexSim3Expmap>
 {
 public:
@@ -189,10 +196,12 @@ public:
         _error = obs-v1->pCamera1->project(v1->estimate().map(v2->estimate()));
     }
 
+    // 自动求导，没错g2o也有自动求导
     // virtual void linearizeOplus();
 
 };
 
+// sim3反投的边
 class EdgeInverseSim3ProjectXYZ : public  g2o::BaseBinaryEdge<2, Eigen::Vector2d,  g2o::VertexSBAPointXYZ, VertexSim3Expmap>
 {
 public:
@@ -210,6 +219,7 @@ public:
         _error = obs-v1->pCamera2->project((v1->estimate().inverse().map(v2->estimate())));
     }
 
+    // 自动求导，没错g2o也有自动求导
     // virtual void linearizeOplus();
 
 };

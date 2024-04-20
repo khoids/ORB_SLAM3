@@ -70,7 +70,7 @@ Eigen::Matrix<T,3,3> NormalizeRotation(const Eigen::Matrix<T,3,3> &R) {
     return svd.matrixU() * svd.matrixV().transpose();
 }
 
-
+// 相关节点中使用，存放的是imu与cam的内外参
 class ImuCamPose
 {
 public:
@@ -106,9 +106,10 @@ public:
     Eigen::Matrix3d Rwb0;
     Eigen::Matrix3d DR;
 
-    int its;
+    int its; // 记录更新次数
 };
 
+// 逆深度点，后面节点虽然有用到，但是声明的节点并没有使用到，暂时不看
 class InvDepthPoint
 {
 public:
@@ -127,6 +128,7 @@ public:
 };
 
 // Optimizable parameters are IMU pose
+// 优化中关于位姿的节点，6自由度
 class VertexPose : public g2o::BaseVertex<6,ImuCamPose>
 {
 public:
@@ -143,15 +145,20 @@ public:
     virtual bool read(std::istream& is);
     virtual bool write(std::ostream& os) const;
 
+    // 重置函数,设定被优化变量的原始值
     virtual void setToOriginImpl() {
         }
 
     virtual void oplusImpl(const double* update_){
+        // https://github.com/RainerKuemmerle/g2o/blob/master/doc/README_IF_IT_WAS_WORKING_AND_IT_DOES_NOT.txt
+        // 官方讲解cache
+        // 需要在oplusImpl与setEstimate函数中添加
         _estimate.Update(update_);
         updateCache();
     }
 };
 
+// 优化中关于位姿的节点，4自由度  3个平移加一个航偏
 class VertexPose4DoF : public g2o::BaseVertex<4,ImuCamPose>
 {
     // Translation and yaw are the only optimizable variables
@@ -175,6 +182,7 @@ public:
     virtual void setToOriginImpl() {
         }
 
+    // 强制让旋转的前两维的更新量为0
     virtual void oplusImpl(const double* update_){
         double update6DoF[6];
         update6DoF[0] = 0;
@@ -188,6 +196,9 @@ public:
     }
 };
 
+/** 
+ * @brief 速度节点
+ */
 class VertexVelocity : public g2o::BaseVertex<3,Eigen::Vector3d>
 {
 public:
@@ -209,6 +220,9 @@ public:
     }
 };
 
+/** 
+ * @brief 陀螺仪偏置节点
+ */
 class VertexGyroBias : public g2o::BaseVertex<3,Eigen::Vector3d>
 {
 public:
@@ -230,7 +244,9 @@ public:
     }
 };
 
-
+/** 
+ * @brief 加速度计偏置节点
+ */
 class VertexAccBias : public g2o::BaseVertex<3,Eigen::Vector3d>
 {
 public:
@@ -254,6 +270,7 @@ public:
 
 
 // Gravity direction vertex
+// 重力方向
 class GDirection
 {
 public:
@@ -263,6 +280,7 @@ public:
 
     void Update(const double *pu)
     {
+        // 强行优化不可观的数据，会导致不收敛
         Rwg=Rwg*ExpSO3(pu[0],pu[1],0.0);
     }
 
@@ -271,6 +289,9 @@ public:
     int its;
 };
 
+/** 
+ * @brief 重力方向节点
+ */
 class VertexGDir : public g2o::BaseVertex<2,GDirection>
 {
 public:
@@ -293,6 +314,9 @@ public:
 };
 
 // scale vertex
+/** 
+ * @brief 尺度节点
+ */
 class VertexScale : public g2o::BaseVertex<1,double>
 {
 public:
@@ -318,6 +342,9 @@ public:
 
 
 // Inverse depth point (just one parameter, inverse depth at the host frame)
+/** 
+ * @brief 没用
+ */
 class VertexInvDepth : public g2o::BaseVertex<1,InvDepthPoint>
 {
 public:
@@ -339,6 +366,14 @@ public:
     }
 };
 
+/** 
+ * @brief 单目视觉重投影的边
+ * 这里或许会有疑问，OptimizableTypes.h 里面不是定义了视觉重投影的边么？
+ * 原因是这样，那里面定义的边也用，不过只是在纯视觉时，没有imu情况下，因为用已经定义好的节点就好
+ * 但是加入imu时，优化要有残差的边与重投影的边同时存在，且两个边可能连接同一个位姿节点，所以需要重新弄一个包含imu位姿的节点
+ * 因此，边也需要重新写，并且在imu优化时使用这个边
+ */
+// 误差为2维， 类型为Eigen::Vector2d， 节点1类型为g2o::VertexSBAPointXYZ，节点二类型为VertexPose
 class EdgeMono : public g2o::BaseBinaryEdge<2,Eigen::Vector2d,g2o::VertexSBAPointXYZ,VertexPose>
 {
 public:
@@ -350,6 +385,7 @@ public:
     virtual bool read(std::istream& is){return false;}
     virtual bool write(std::ostream& os) const{return false;}
 
+    // 计算重投影误差
     void computeError(){
         const g2o::VertexSBAPointXYZ* VPoint = static_cast<const g2o::VertexSBAPointXYZ*>(_vertices[0]);
         const VertexPose* VPose = static_cast<const VertexPose*>(_vertices[1]);
@@ -375,6 +411,8 @@ public:
         return J;
     }
 
+    // 由2*2的像素点信息矩阵变成了9*9的关于旋转平移与三维点坐标的信息矩阵
+    // 可以理解为像素的不确定性给旋转平移跟三维点带来了多大的不确定性
     Eigen::Matrix<double,9,9> GetHessian(){
         linearizeOplus();
         Eigen::Matrix<double,2,9> J;
@@ -387,6 +425,9 @@ public:
     const int cam_idx;
 };
 
+/** 
+ * @brief 单目纯位姿一元边
+ */
 class EdgeMonoOnlyPose : public g2o::BaseUnaryEdge<2,Eigen::Vector2d,VertexPose>
 {
 public:
@@ -422,11 +463,15 @@ public:
     const int cam_idx;
 };
 
+/** 
+ * @brief 双目位姿三维点二元边
+ */
 class EdgeStereo : public g2o::BaseBinaryEdge<3,Eigen::Vector3d,g2o::VertexSBAPointXYZ,VertexPose>
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+    // 代码中都是0
     EdgeStereo(int cam_idx_=0): cam_idx(cam_idx_){}
 
     virtual bool read(std::istream& is){return false;}
@@ -462,7 +507,9 @@ public:
     const int cam_idx;
 };
 
-
+/** 
+ * @brief 双目纯位姿一元边
+ */
 class EdgeStereoOnlyPose : public g2o::BaseUnaryEdge<3,Eigen::Vector3d,VertexPose>
 {
 public:
@@ -492,6 +539,9 @@ public:
     const int cam_idx;
 };
 
+/** 
+ * @brief 惯性边（误差为残差）
+ */
 class EdgeInertial : public g2o::BaseMultiEdge<9,Vector9d>
 {
 public:
@@ -505,6 +555,7 @@ public:
     void computeError();
     virtual void linearizeOplus();
 
+    // 关于pose1与2 的旋转平移速度，以及之间的偏置的信息矩阵
     Eigen::Matrix<double,24,24> GetHessian(){
         linearizeOplus();
         Eigen::Matrix<double,9,24> J;
@@ -517,6 +568,7 @@ public:
         return J.transpose()*information()*J;
     }
 
+    // 没用
     Eigen::Matrix<double,18,18> GetHessianNoPose1(){
         linearizeOplus();
         Eigen::Matrix<double,9,18> J;
@@ -528,6 +580,7 @@ public:
         return J.transpose()*information()*J;
     }
 
+    // 关于pose2 的旋转平移信息矩阵
     Eigen::Matrix<double,9,9> GetHessian2(){
         linearizeOplus();
         Eigen::Matrix<double,9,9> J;
@@ -536,15 +589,19 @@ public:
         return J.transpose()*information()*J;
     }
 
+    // 预积分中对应的状态对偏置的雅可比
     const Eigen::Matrix3d JRg, JVg, JPg;
     const Eigen::Matrix3d JVa, JPa;
-    IMU::Preintegrated* mpInt;
-    const double dt;
-    Eigen::Vector3d g;
+    IMU::Preintegrated* mpInt;  // 预积分
+    const double dt;            // 预积分时间
+    Eigen::Vector3d g;          // 0, 0, -IMU::GRAVITY_VALUE
 };
 
 
 // Edge inertial whre gravity is included as optimizable variable and it is not supposed to be pointing in -z axis, as well as scale
+/** 
+ * @brief 初始化惯性边（误差为残差）
+ */
 class EdgeInertialGS : public g2o::BaseMultiEdge<9,Vector9d>
 {
 public:
@@ -565,6 +622,7 @@ public:
     const double dt;
     Eigen::Vector3d g, gI;
 
+    // 关于pose1与2 的旋转平移速度，以及之间的偏置，还有重力方向与尺度的信息矩阵
     Eigen::Matrix<double,27,27> GetHessian(){
         linearizeOplus();
         Eigen::Matrix<double,9,27> J;
@@ -579,6 +637,7 @@ public:
         return J.transpose()*information()*J;
     }
 
+    // 与上面摆放不同
     Eigen::Matrix<double,27,27> GetHessian2(){
         linearizeOplus();
         Eigen::Matrix<double,9,27> J;
@@ -593,6 +652,7 @@ public:
         return J.transpose()*information()*J;
     }
 
+    // 关于偏置，重力方向与尺度的信息矩阵
     Eigen::Matrix<double,9,9> GetHessian3(){
         linearizeOplus();
         Eigen::Matrix<double,9,9> J;
@@ -630,8 +690,9 @@ public:
     }
 };
 
-
-
+/** 
+ * @brief 陀螺仪偏置的二元边，除了残差及重投影误差外的第三个边，控制偏置变化
+ */
 class EdgeGyroRW : public g2o::BaseBinaryEdge<3,Eigen::Vector3d,VertexGyroBias,VertexGyroBias>
 {
 public:
@@ -667,7 +728,9 @@ public:
     }
 };
 
-
+/** 
+ * @brief 加速度计偏置的二元边，除了残差及重投影误差外的第三个边，控制偏置变化
+ */
 class EdgeAccRW : public g2o::BaseBinaryEdge<3,Eigen::Vector3d,VertexAccBias,VertexAccBias>
 {
 public:
@@ -703,6 +766,9 @@ public:
     }
 };
 
+/** 
+ * @brief 先验类
+ */
 class ConstraintPoseImu
 {
 public:
@@ -712,7 +778,8 @@ public:
                        const Eigen::Vector3d &bg_, const Eigen::Vector3d &ba_, const Matrix15d &H_):
                        Rwb(Rwb_), twb(twb_), vwb(vwb_), bg(bg_), ba(ba_), H(H_)
     {
-        H = (H+H)/2;
+        H = (H+H)/2;  // 对称化
+        // 令特征值小的位置变为0
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double,15,15> > es(H);
         Eigen::Matrix<double,15,1> eigs = es.eigenvalues();
         for(int i=0;i<15;i++)
@@ -729,6 +796,9 @@ public:
     Matrix15d H;
 };
 
+/** 
+ * @brief 先验边，前端优化单帧用到
+ */
 class EdgePriorPoseImu : public g2o::BaseMultiEdge<15,Vector15d>
 {
 public:
@@ -765,6 +835,7 @@ public:
 };
 
 // Priors for biases
+
 class EdgePriorAcc : public g2o::BaseUnaryEdge<3,Eigen::Vector3d,VertexAccBias>
 {
 public:
@@ -789,6 +860,9 @@ public:
     const Eigen::Vector3d bprior;
 };
 
+/** 
+ * @brief 根据给定值的陀螺仪先验边，目的是把优化量维持在先验附近
+ */
 class EdgePriorGyro : public g2o::BaseUnaryEdge<3,Eigen::Vector3d,VertexGyroBias>
 {
 public:
@@ -813,7 +887,9 @@ public:
     const Eigen::Vector3d bprior;
 };
 
-
+/** 
+ * @brief 4DOF的二元边，误差为给定的旋转平移改变量 与 两个输入节点之间的旋转平移改变量的偏差
+ */
 class Edge4DoF : public g2o::BaseBinaryEdge<6,Vector6d,VertexPose4DoF,VertexPose4DoF>
 {
 public:
