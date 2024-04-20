@@ -65,8 +65,7 @@ namespace ORB_SLAM3 {
      * @param[in] N                         所有2D点的个数
      * @param[in] mpCamera                  相机模型，利用该变量对3D点进行投影
      */
-    MLPnPsolver::MLPnPsolver(const Frame &F, const vector<MapPoint *> &vpMapPointMatches):
-            mnInliersi(0), mnIterations(0), mnBestInliers(0), N(0), mpCamera(F.mpCamera){
+    
     MLPnPsolver::MLPnPsolver(const Frame &F,                            // 输入帧的数据
                             const vector<MapPoint *> &vpMapPointMatches // 待匹配的特征点，是当前帧和候选关键帧用BoW进行快速匹配的结果
                             ) : mnInliersi(0),                          // 内点的个数
