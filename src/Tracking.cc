@@ -2497,7 +2497,11 @@ void Tracking::Track()
         // 更新显示线程中的图像、特征点、地图点等信息
         mpFrameDrawer->Update(this);
         if(mCurrentFrame.isSet())
+        {
             mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.GetPose());
+            mpMapDrawer->ComputeGroundPos();
+        }
+            
 
         // 查看到此为止时的两个状态变化
         // bOK的历史变化---上一帧跟踪成功---当前帧跟踪成功---局部地图跟踪成功---true
